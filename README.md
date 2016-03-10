@@ -7,9 +7,9 @@ maze.html与maze仓库中的一样，maze2.html添加了选择难度功能，maz
           排名榜
   为了游戏效果，采用了bootstrap，按钮样式，以及模态框来实现排名榜
   该游戏用localStorage来实现存储功能，也可以用AJAX来实现，将墙信息存到json里就可以<br/>
->(1)<input type='radio' name='level'>单选框，要求不同input标签的name值相同
->(2)计时功能通过定时器实现
->(3)排名榜应用数组函数
+>(1)<input type='radio' name='level'>单选框，要求不同input标签的name值相同<br/>
+(2)计时功能通过定时器实现<br/>
+(3)排名榜应用数组函数
 ```javascript      
 arr.sort();实现按字符串排序
 按数值排序，则要写比较函数作为sort的参数
