@@ -18,11 +18,11 @@ function compare(a,b){
   return b-a;//从大到小的顺序
 }
 ```
->js实现模态框调用
+js实现模态框调用
 ```javascript
-$("#myModal").modal('shohw');
+$("#myModal").modal('show');
 ```
->(4)文本垂直居中（仅适用于单行文本和图片）
+(4)文本垂直居中（仅适用于单行文本和图片）
 ```javascript
 div{
 height:'80px';
