@@ -1,13 +1,12 @@
 # mazeGame   迷宫游戏完整版
 maze.html与maze仓库中的一样，maze2.html添加了选择难度功能，mazeIntact.html是完整版游戏，下面主要介绍mazeIntact.html文件
-游戏功能：提供不同级别的游戏 具体难度迷宫可由maze.html来绘制
-          计时功能
-          token边界限制
-          游戏出口和入口
-          排名榜
-  为了游戏效果，采用了bootstrap，按钮样式，以及模态框来实现排名榜
-  该游戏用localStorage来实现存储功能，也可以用AJAX来实现，将墙信息存到json里就可以<br/>
->(1)<input type='radio' name='level'>单选框，要求不同input标签的name值相同<br/>
+游戏功能：+ 提供不同级别的游戏 具体难度迷宫可由maze.html来绘制
+          + 计时功能
+          + token边界限制
+          + 游戏出口和入口
+          + 排名榜
+为了游戏效果，采用了bootstrap，按钮样式，以及模态框来实现排名榜，该游戏用localStorage来实现存储功能，也可以用AJAX来实现，将墙信息存到json里就可以<br/>
+(1)<input type='radio' name='level'>单选框，要求不同input标签的name值相同<br/>
 (2)计时功能通过定时器实现<br/>
 (3)排名榜应用数组函数
 ```javascript      
