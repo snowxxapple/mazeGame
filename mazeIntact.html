@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<!-- 完整的迷宫游戏，选择等级来完成游戏,本版本只有从localStorage中获取迷宫的过程，可以用第一个版本来绘制迷宫，利用离线存储来实现最高排名 游戏有计时 为了使游戏美观，使用了bootstrap -->
+<!-- 排序方法arr.sort(),只能按字符串排序，如果要按照数字排序，则需要写一个排序函数作为sort()的参数
+ -->
+<html>
+
+<head>
+    <title>迷宫完整版</title>
+    <meta charset='utf-8'>
+</head>
+<!-- 要引入的东西，最好在一开始就引入，且jquery要在bootstrap.js之前，因为bootstrap.js里面用了jquery
+ -->
+<script type="text/javascript" src='js/jquery-1.11.2.min.js'></script>
+<script type="text/javascript" src='js/bootstrap.js'></script>
+<link rel="stylesheet" type="text/css" href="css/bootstrap.css">
+<style type="text/css">
+#cvs {
+    margin: auto;
+    /*画布要为block显示才能margin有效*/
+    background: #cfe;
+    border-radius: 10px;
+}
+#countTime {
+    margin: auto;
+    width: 900px;
+    height: 80px;
+    background: #efa;
+    border-radius: 10px;
+    text-align: center;
+    line-height: 80px;
+    /*div内容垂直居中，用vertical-align是不可以的，这个只对th,td,caption起作用，因为他们拥有valign特性，像div,span是没有这个特性的，所以不起作用，对于单行文本，设置line-height与div的高度一致，则文本就会垂直居中了*/
+    font-size: 30px;
+    font-weight: bold;
+}
+form {
+    text-align: center;
+    padding-top: 20px;
+    margin-bottom: 20px;
+}
+</style>
+
+<body>
+    <canvas id='cvs' width='900px;' height='450px;' style='display:block;'></canvas>
+    <!-- canvas要设置块显示才会margin:auto有效 -->
+    <div id='countTime'>用时：</div>
+    <form name='gf2' onsubmit='return false'>
+        <!-- 这种情况下也会有自动刷新的现象  -->
+        <input type='radio' name='level' value='初级'>初级
+        <input type='radio' name='level' value='中级'>中级
+        <input type='radio' name='level' value='高级'>高级
+        <button value='选取迷宫' id='getBtn2' class='btn btn-primary'>选取迷宫</button>
+    </form>
+    <!-- 弹出的排名模态框 -->
+    <div class="modal fade" id='myModal'>
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 class='modal-title'>英雄榜</h3>
+                </div>
+                <div class="modal-body" overflow-y='hidden'>
+                    <table class='table table-bordered table-hover'>
+                        <tr>
+                            <th>排名</th>
+                            <th>用时(s)</th>
+                        </tr>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <button type='button' class='btn btn-primary' data-dismiss='modal'>关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+<script type="text/javascript">
+var cavs = document.getElementById('cvs');
+var ctx = cavs.getContext('2d');
+var everything = []; //存放画布上要显示的元素：迷宫的墙和token
+var curwall; //当前绘制的墙（不断变化的）
+var walls = []; //存放所有的墙（画好的，不再变化的墙）
+var wallWidth = 5;
+var wallStyle = 'grey';
+var tokenStyle = 'pink';
+var cvsWidth = 900;
+var cvsHeight = 450;
+var imotion = false; //鼠标键是否按下
+var unit = 5; //token移动速度
+var mazeName;
+var radius = 5; //token的半径
+var exitX = cvsWidth - radius * 3 - 15;
+var exitY = cvsHeight - radius * 3;
+var timeCounter = document.getElementById('countTime'); //计时器
+// 建立定时器 实现计时功能
+var timer;
+var time = 0; //计时器的计数
+var startX = 20; //小球出发的位置
+var startY = 20;
+var sequence = new Array(); // 排序数组
+//自定义墙对象
+function wall(sx, sy, fx, fy, width, drawStyle) {
+    this.sx = sx;
+    this.sy = sy;
+    this.fx = fx;
+    this.fy = fy;
+    this.width = width;
+    this.strokeStyle = drawStyle;
+    this.draw = drawWall; //对象的方法
+}
+//画墙的方法
+function drawWall() {
+    ctx.lineWidth = this.width; //设置线宽
+    ctx.strokeStyle = this.strokeStyle;
+    ctx.beginPath();
+    ctx.moveTo(this.sx, this.sy);
+    ctx.lineTo(this.fx, this.fy);
+    ctx.stroke();
+}
+//自定义token对象
+function token(cx, cy, rad, fillStyle) {
+    this.cx = cx;
+    this.cy = cy;
+    this.rad = rad;
+    this.fillStyle = fillStyle;
+    this.draw = drawToken; //画出token的方法
+    this.moviet = move; //token移动时，判断是否与所有的墙相交
+}
+//画token
+function drawToken() {
+    ctx.beginPath();
+    ctx.fillStyle = this.fillStyle;
+    ctx.arc(this.cx, this.cy, this.rad, 0, Math.PI * 2, true);
+    ctx.fill();
+}
+//token在移动的过程中，判断是否与墙相撞
+function move(dx, dy) {
+    var wall;
+    //先计算移动后的位置 
+    this.cx = this.cx + dx;
+    this.cy = this.cy + dy;
+    //如果移动后的位置超出了画布的大小，则出界
+    if ((this.cx <= 0) || this.cy <= 0 || this.cx >= cvsWidth || this.cy >= cvsHeight) {
+        this.cx = this.cx - dx;
+        this.cy = this.cy - dy;
+        console.log('出界');
+    }
+    //判断token是否与墙相撞 如果相撞，则token不动
+    for (var i = 0; i < walls.length; i++) {
+        wall = walls[i];
+        if (intersect(wall.sx, wall.sy, wall.fx, wall.fy, this.cx, this.cy, this.rad)) { //相交
+            alert('再走就撞墙啦！');
+            console.log('撞墙');
+            //相撞，则不改变token的位置
+            this.cx = this.cx - dx;
+            this.cy = this.cy - dy;
+            break; //如果检测到与其中一面墙相交，则跳出循环 
+        }
+    }
+}
+function intersect(sx, sy, fx, fy, cx, cy, rad) {
+    //先找与token最接近的墙上的点，再计算圆心和最近点之间的距离 利用数学导数的知识
+    var t;
+    var dx;
+    var dy;
+    var x;
+    var y;
+    dx = fx - sx;
+    dy = fy - sy;
+    t = 0.0 - ((sx - cx) * dx + (sy - cy) * dy) / ((dx * dx) + (dy * dy)); //0.0-是强制转化为小数模式
+    //将线段系数化，因子*总长度 0=<因子<=1
+    if (t < 0) {
+        t = 0;
+    } else if (t > 1) {
+        t = 1;
+    }
+    x = sx + t * (fx - sx);
+    y = sy + t * (fy - sy);
+    d = (cx - x) * (cx - x) + (cy - y) * (cy - y);
+    if (d > rad * rad) { //没相交
+        return false;
+    } else if (d <= rad * rad) { //相交
+        return true;
+    }
+}
+//生成token 并把token放到画布上要画的东西数组中everything[]
+var token = new token(startX, startY, radius, tokenStyle);
+everything.push(token);
+//页面加载完执行
+window.onload = function() {
+        //监听获取迷宫按钮的的click时间，并绘制画布以及画布上要显示的东西
+        var getBtn2 = document.getElementById('getBtn2');
+        getBtn2.addEventListener('click', getMaze2, false);
+        drawAll();
+    }
+    //getBtn2click事件函数：选择难度后获取迷宫 要判断是否选择了难度 要判断当前选择的迷宫是否存在
+function getMaze2() {
+    $('#container').remove(); //对于动态添加的按钮，在每次添加前一定要清除
+    //初始化画布
+    ctx.clearRect(0, 0, cvsWidth, cvsHeight);
+    walls = [];
+    everything = [];
+    token.cx = startX;
+    token.cy = startY;
+    token.rad = radius;
+    everything.push(token);
+    drawAll();
+    //选择难度后 清除定时器
+    clearInterval(timer);
+    time = 0;
+    timeCounter.innerHTML = '用时：';
+    var string; //拆封后的字符串
+    var allWall = []; //存储所有墙
+    var newWall; //
+    var oneWall; //一面墙的四个参数
+    var w;
+    var choose = false; //是否选择了迷宫
+    console.log(document.gf2.level); //是个数组
+    //判断是否选择了难度
+    for (var i = 0; i < document.gf2.level.length; i++) {
+        if (document.gf2.level[i].checked) {
+            string = localStorage.getItem(document.gf2.level[i].value);
+            console.log(document.gf2.level[i].value);
+            choose = true;
+            console.log(choose, 'choose');
+            break;
+        }
+        // else{//注意这里不能写else，因为i是从0开始的，所以第一次循环时，检测是否选中低级，如果未选中低级，则会进入到else里面，这时会显示请选择迷宫，这时就会出错了！
+        // 	choose=false;//如果没选择迷宫
+        // 	alert('请选择迷宫');
+        // 	break;
+        // }
+    }
+    if (!choose) {
+        alert('请选择迷宫');
+    }
+    //选择了迷宫 且存在该迷宫
+    if (string != null) {
+        allWall = string.split(';');
+        for (var i = 0; i < allWall.length; i++) {
+            var oneWall = allWall[i]; //'sx1+sy1+fx1+fy1','sx2+sy2+fx2+fy2',...
+            var w = oneWall.split('+'); //[sx1,sy1,fx1,fy1]
+            console.log(typeof(w[0])); //String 最好把String转化为数字，尽管不转化也可以
+            var newWall = new wall(Number(w[0]), Number(w[1]), Number(w[2]), Number(w[3]), wallWidth, wallStyle);
+            everything.push(newWall);
+            walls.push(newWall);
+        }
+        $('form').after("<div id='container' style='text-align:center;margin:auto;'><button id='start' class='btn btn-success' style='margin-right:10px;'>start!</button><button id='reset' class='btn btn-warning'>重新开始</button><div>");
+        var startBtn = document.getElementById('start');
+        var resetBtn = document.getElementById('reset');
+        if (startBtn) {
+            startBtn.addEventListener('click', watch, false);
+            resetBtn.addEventListener('click', resetGame, false);
+        }
+        drawAll();
+    }
+    //选择了迷宫，但是迷宫不存在
+    if (choose && string == null) { //如果选择了但是string是空的
+        alert('没有这个迷宫');
+    }
+    //start按钮点击  游戏开始，可以移动token了，计时开始 
+    function watch() {
+        $('#start').attr('disabled', 'disabled');
+        console.log('计时开始');
+        window.addEventListener('keydown', keyMove, false);
+        clearInterval(timer); //定时器在用之前一定要先清除，否则会定时器里套定时器此外定时器定义为全局变量
+        time = 0;
+        timeCounter.innerHTML = "用时:" + time + 's';
+        timer = setInterval(timeAll, 1000);
+    }
+    //定时器要执行的函数
+    function timeAll() {
+        console.log('正在计时');
+        time = time + 1;
+        timeCounter.innerHTML = "用时:" + time + 's';
+    }
+    //重新开始按钮点击后  计时器清零 小球回到原处 画出此时画布上要显示的东西（回到原位的小球，以及当前的迷宫）
+    function resetGame() {
+        console.log('重新开始');
+        window.addEventListener('keydown', keyMove, false);
+        clearInterval(timer);
+        time = 0;
+        timeCounter.innerHTML = "用时:" + time + 's';
+        timer = setInterval(timeAll, 1000);
+        //小球回到原处 清除整个画布，并重新复制token的位置，在循环everything里的对象，调用draw()方法
+        ctx.clearRect(0, 0, cvsWidth, cvsHeight);
+        token.cx = startX;
+        token.cy = startY;
+        drawAll();
+    }
+    //利用everything[]存储要画的对象，然后统一调用draw方法
+    function drawAll() {
+        //在使用画布前，一定要清空
+        ctx.clearRect(0, 0, cvsWidth, cvsHeight);
+        //给迷宫设置出口和入口位置
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillStyle = 'black';
+        ctx.fillText('入口', 5, 5 + radius * 3);
+        ctx.fillText('出口', exitX, exitY);
+        //这种用对象数组的方法来调用方法一定要会！
+        for (var i = 0; i < everything.length; i++) {
+            everything[i].draw();
+        }
+    }
+    //按键函数
+    function keyMove() {
+        var keyCode;
+        //获取按键值
+        if (event == null) {
+            keyCode = window.event.keyCode;
+        } else {
+            keyCode = event.keyCode;
+        }
+        switch (keyCode) {
+            case 37:
+                token.moviet(-unit, 0);
+                break;
+            case 38:
+                token.moviet(0, -unit);
+                break;
+            case 39:
+                token.moviet(unit, 0);
+                break;
+            case 40:
+                token.moviet(0, unit);
+                break;
+            default:
+                token.moviet(0, 0);
+        }
+        //本游戏，移动token不是通过定时器实现的，是每按一次按键重绘一次整个画布
+        drawAll();
+        //判断是否成功出去
+        success();
+    }
+    //判断是否成功出去函数
+    function success() {
+        var order;
+        var str;
+        time = Number(time); //将时间转换成number形式 原来是str 因为和字符串相连
+        if ((token.cx - exitX) >= 0 && (token.cy - exitY) >= 0) { //成功出去
+            //到达出口了 停止定时器 移除按键监听 同时弹出框显示排名
+            window.removeEventListener('keydown', keyMove, false);
+            clearInterval(timer);
+            //将不同等级的比赛结果存到不同的键值中 orderSave1 orderSave2 orderSave3
+            //获取当前的等级，并从localStorage中取值
+            var stage = document.gf2.level.value;
+            switch (stage) {
+                case '初级':
+                    order = localStorage.getItem('orderSave1'); //'1+2+5+6+9+....'
+                    break;
+                case '中级':
+                    order = localStorage.getItem('orderSave2'); //'1+2+5+6+9+....'
+                    break;
+                case '高级':
+                    order = localStorage.getItem('orderSave3'); //'1+2+5+6+9+....'
+                    break;
+            }
+            //如果localStorage有值	把排好序的表存到localstorage中
+            if (order != null) {
+                sequence = order.split('+'); //[1,2,5,6,9,...]
+                sequence.push(time);
+                sequence.sort(minTmax()); //比较数字，并按照从小到大排列,要写一个比较函数在sort内
+                //排好序，把数组存入到localStorage
+                console.log(sequence); //sequence[1,2,3,4,5,....]
+                str = sequence.join('+'); //用加号把元素连接起来"1+2+3+4+...."
+                switch (stage) {
+                    case '初级':
+                        localStorage.setItem('orderSave1', str);
+                        break;
+                    case '中级':
+                        localStorage.setItem('orderSave2', str);
+                        break;
+                    case '高级':
+                        localStorage.setItem('orderSave3', str);
+                        break;
+                }
+            }
+            //如果localStorage中没有值 直接存入localstorage中
+            else {
+                sequence.push(time);
+                str = sequence.join('+');
+                switch (stage) {
+                    case '初级':
+                        localStorage.setItem('orderSave1', str);
+                        break;
+                    case '中级':
+                        localStorage.setItem('orderSave2', str);
+                        break;
+                    case '高级':
+                        localStorage.setItem('orderSave3', str);
+                        break;
+                }
+            }
+            //对比赛结果表的处理，要先移除原有的，再添加新的，因为新的是重新排序的
+            $('tr').remove();
+            for (var j = 0; j < sequence.length; j++) {
+                $('.table-bordered').append("<tr><td>第" + (j + 1) + "名：</td><td>" + sequence[j] + "s</td></tr>");
+                //将当前玩家的名词凸显出来 
+                if (sequence[j] == time) {
+                    console.log(j);
+                    $($('tr')[j]).addClass('success'); //调用jq方法的对象必须是jq对象
+                }
+            }
+            //用js调用modal
+            $('#myModal').modal('show');
+        }
+    }
+    function minTmax(a, b) {
+        return a - b; //从小到大排列，返回<0的值
+    }
+}
+</script>
+
+</html>
